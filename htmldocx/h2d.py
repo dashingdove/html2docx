@@ -343,11 +343,13 @@ class HtmlToDocx(HTMLParser):
         rows = self.get_table_rows(table_soup)
         cell_row = 0
         docx_cells = self.table._cells
+        col_lengths = [0] * len(self.table.columns)
         for row in rows:
             cols = self.get_table_columns(row)
             cell_col = 0
-            for col in cols:
+            for j, col in enumerate(cols):
                 cell_html = self.get_cell_html(col)
+                col_lengths[j] = max(col_lengths[j], len(cell_html))
                 if col.name == 'th':
                     cell_html = "<b>%s</b>" % cell_html
                 docx_cell = docx_cells[cell_col + (cell_row * self.table._column_count)]
@@ -356,6 +358,16 @@ class HtmlToDocx(HTMLParser):
                 child_parser.add_html_to_cell(cell_html, docx_cell)
                 cell_col += 1
             cell_row += 1
+
+        # attempt to autofit column widths
+        if hasattr(self.doc, 'sections'):
+            section = self.doc.sections[-1]
+            section_width = section.page_width - (section.left_margin + section.right_margin)
+        else: # table inserted inside a cell
+            section_width = self.doc.width
+        for i, column in enumerate(self.table.columns):
+            for cell in column.cells:
+                cell.width = section_width * (col_lengths[i] / sum(col_lengths))
         
         # skip all tags until corresponding closing tag
         self.instances_to_skip = len(table_soup.find_all('table'))
